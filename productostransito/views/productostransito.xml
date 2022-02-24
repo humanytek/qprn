@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="productostransito_view_search" model="ir.ui.view">
+        <field name="name">productostransito.search</field>
+        <field name="model">purchase.order.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="state"/>
+                <field name="entransito_store"/>
+                <filter name="productos_transito" string="Productos en tránsito"
+                domain="[('state', '=', 'purchase'), ('entransito_store', '!=', 0)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="productostransito_action" model="ir.actions.act_window">
+        <field name="name">Productos en tránsito</field>
+        <field name="res_model">purchase.order.line</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context" eval="{'search_default_productos_transito': 1}"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No hay productos que mostrar
+            </p>
+        </field>
+    </record>
+
+    <record id="productostransito_view_list" model="ir.ui.view">
+        <field name="name">productostransito.view.list.inherited</field>
+        <field name="model">purchase.order.line</field>
+        <field name="inherit_id" ref="purchase.purchase_order_line_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_qty']" position="after">
+                <field name="qty_received"/>
+                <field name="entransito_store" sum="Total de productos en tránsito"/>
+                <field name="costotransito_store" sum="Costo total en tránsito"/>
+            </xpath>
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="almacen"/>
+            </xpath>
+        </field>
+    </record>
+
+    <menuitem id="productostransito" name="Productos en tránsito" parent="purchase.menu_purchase_root" action="productostransito_action"/>
+</odoo>

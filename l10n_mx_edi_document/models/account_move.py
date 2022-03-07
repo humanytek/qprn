@@ -101,7 +101,7 @@ class AccountInvoice(models.Model):
                     'quantity': float(qty),
                     'product_uom_id': uom_id.id,
                     'tax_ids': self.get_line_taxes(rec),
-                    'price_unit': float(price),
+                    'price_unit': currency.round(float(price)),
                     'discount': discount,
                 })]})
 

@@ -61,6 +61,7 @@ class Productostransito(models.Model):
                         r.entransito = sum(tm.mapped('product_uom_qty'))
                         subtotal = r.price_unit * r.entransito
                         fecha = r.order_id.date_approve
+                        #Se hace la conversion reutilizando el metodo de currency_id
                         r.costotransito = r.order_id.currency_id._convert(subtotal,
                                                                         r.order_id.company_id.currency_id,
                                                                         r.order_id.company_id,

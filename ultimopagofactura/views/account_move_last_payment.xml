@@ -20,6 +20,7 @@
         <field name="arch" type="xml">
             <xpath expr="//notebook//page[@name='other_info']//group[@id='other_tab_group']//group[@name='sale_info_group']" position="inside">
                 <field name="fecha_ultimo_pago_factura_store"/>
+                <field name="dias_pagar_store"/>
             </xpath>
         </field>
     </record>

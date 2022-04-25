@@ -19,6 +19,19 @@ class Ultimopagofactura(models.Model):
         store = True,
     )
 
+    dias_pagar = fields.Integer(
+        string = 'Días que tardaron en pagar compute',
+        compute = 'get_dias_pagar',
+        default = 0,
+    )
+
+    dias_pagar_store = fields.Integer(
+        string = 'Días que tardaron en pagar',
+        compute = 'set_dias_pagar',
+        default = 0,
+        store = True,
+    )
+
     @api.depends('invoice_payments_widget')
     def _last_payment_date(self):
         for record in self:
@@ -36,3 +49,21 @@ class Ultimopagofactura(models.Model):
                 record.fecha_ultimo_pago_factura_store = record.fecha_ultimo_pago_factura
             else:
                 record.fecha_ultimo_pago_factura_store = None
+
+    @api.depends('fecha_ultimo_pago_factura_store', 'invoice_date')
+    @api.onchange('fecha_ultimo_pago_factura_store', 'invoice_date')
+    def get_dias_pagar(self):
+        for record in self:
+            if record.fecha_ultimo_pago_factura_store and record.invoice_date:
+                record.dias_pagar = (record.fecha_ultimo_pago_factura_store-record.invoice_date).days
+            else:
+                record.dias_pagar = 0
+
+    @api.depends('dias_pagar')
+    @api.onchange('dias_pagar')
+    def set_dias_pagar(self):
+        for record in self:
+            if record.dias_pagar == 0:
+                record.dias_pagar_store = 0
+            else:
+                record.dias_pagar_store = record.dias_pagar

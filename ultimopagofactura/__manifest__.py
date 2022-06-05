@@ -1,6 +1,6 @@
 {
-    'name': 'Último pago factura, total pagado y parcialidades',
-    'version': '13.0.0.3.5',
+    'name': 'Último pago factura y monto, total pagado y parcialidades',
+    'version': '13.0.0.4.1',
     'author': 'JuanEmus',
     'depends': [
         'account',

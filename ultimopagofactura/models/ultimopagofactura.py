@@ -1,6 +1,8 @@
-from odoo import fields, models,api
-from datetime import date, timedelta
+from odoo import fields, models, api
+from datetime import date, timedelta, datetime
 import json
+import re
+from odoo.exceptions import UserError
 
 class Ultimopagofactura(models.Model):
     _inherit = 'account.move'
@@ -46,16 +48,16 @@ class Ultimopagofactura(models.Model):
         store = True,
     )
 
-    totalpagado = fields.Float(
-        string = 'Total pagado compute',
+    monto_ultimo_pago = fields.Float(
+        string = 'Monto del último pago compute',
         compute = '_last_payment_date',
         readonly = True,
         default = 0,
     )
 
-    totalpagado_store = fields.Float(
-        string = 'Total pagado',
-        compute = '_get_totalpagado',
+    monto_ultimo_pago_store = fields.Float(
+        string = 'Monto del último pago',
+        compute = '_get_monto_ultimo_pago',
         readonly = True,
         default = 0,
     )
@@ -68,22 +70,31 @@ class Ultimopagofactura(models.Model):
                 content = dict.get("content")
                 record.fecha_ultimo_pago_factura = date.fromisoformat(max(payment.get("date") for payment in content))
                 record.parcialidades =  len(content)
-                for r in content:
-                    #We get payment date and substract a day
-                    fecha_aux = (date.fromisoformat(r.get("date"))) - timedelta(1)
-                    #We get the amount and convert to currency of the date
-                    monto = r.get("amount")
-                    moneda = record.env['res.currency.rate'].search([('currency_id','=',record.currency_id.id),
-                    ('name','<=',fecha_aux)],order='name desc', limit=1)
-                    if moneda:
-                        #If moneda exists, we need calculate totalpagado with the last currency at fecha_aux
-                        record.totalpagado += monto * (1/moneda.rate)
-                    else: 
-                        record.totalpagado += monto * 0
+                fecha_anterior = 0
+                sorted_content = sorted(content, key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d'), reverse = True)
+                for r in sorted_content:
+                    text = ""
+                    text2 = ""
+                    if(r.get("journal_name") != "Exchange Difference"):
+                        if(r.get("name") != ""):
+                            if(r.get("date") == fecha_anterior or fecha_anterior == 0):
+                                if(r.get("name") == False):
+                                    record.monto_ultimo_pago += 0
+                                    continue
+                                #TODO: Validar que text no este vacio
+                                text = r.get("name").replace(",","")
+                                text2 = re.findall('\d*\.?\d+',text)
+                                if text2:
+                                    record.monto_ultimo_pago += float(text2[0])
+                                    fecha_anterior = r.get("date")
+                                else:
+                                    record.monto_ultimo_pago += 0
+                        else:
+                            record.monto_ultimo_pago += 0
             else:
                 record.fecha_ultimo_pago_factura = None
                 record.parcialidades = 0     
-                record.totalpagado = 0
+                record.monto_ultimo_pago = 0
 
     @api.depends('fecha_ultimo_pago_factura')
     def _get_fecha_ultimo_pago_factura(self):
@@ -101,13 +112,13 @@ class Ultimopagofactura(models.Model):
             else:
                 record.parcialidades_store = 0
 
-    @api.depends('totalpagado')
-    def _get_totalpagado(self):
+    @api.depends('monto_ultimo_pago')
+    def _get_monto_ultimo_pago(self):
         for record in self:
-            if record.totalpagado:
-                record.totalpagado_store = record.totalpagado
+            if record.monto_ultimo_pago:
+                record.monto_ultimo_pago_store = record.monto_ultimo_pago
             else:
-                record.totalpagado_store = 0
+                record.monto_ultimo_pago_store = 0
 
     @api.depends('fecha_ultimo_pago_factura_store', 'invoice_date')
     @api.onchange('fecha_ultimo_pago_factura_store', 'invoice_date')

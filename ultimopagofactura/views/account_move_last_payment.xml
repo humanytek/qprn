@@ -22,7 +22,7 @@
                 <field name="fecha_ultimo_pago_factura_store"/>
                 <field name="dias_pagar_store"/>
                 <field name="parcialidades_store"/>
-                <field name="totalpagado_store"/>
+                <field name="monto_ultimo_pago_store"/>
             </xpath>
         </field>
     </record>

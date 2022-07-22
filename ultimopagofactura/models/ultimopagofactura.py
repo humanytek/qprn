@@ -89,7 +89,8 @@ class Ultimopagofactura(models.Model):
                                     if "USD" in r.get("currency"):
                                         moneda = record.env['res.currency.rate'].search([('currency_id','=',2),
                                         ('name','<=',date.fromisoformat(r.get("date")))],order='name desc', limit=1)
-                                        record.monto_ultimo_pago += 1/moneda.rate
+                                        tipo_cambio = 1/moneda.rate
+                                        record.monto_ultimo_pago += float(text2[0]) * tipo_cambio
                                     else:
                                         record.monto_ultimo_pago += float(text2[0])
                                         fecha_anterior = r.get("date")

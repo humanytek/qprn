@@ -77,6 +77,7 @@ class Ultimopagofactura(models.Model):
                     text2 = ""
                     if(r.get("journal_name") != "Exchange Difference"):
                         if(r.get("name") != ""):
+                            #Si los pagos se relizaron en la misma fecha, estos se deben sumar
                             if(r.get("date") == fecha_anterior or fecha_anterior == 0):
                                 if(r.get("name") == False):
                                     record.monto_ultimo_pago += 0
@@ -85,8 +86,13 @@ class Ultimopagofactura(models.Model):
                                 text = r.get("name").replace(",","")
                                 text2 = re.findall('\d*\.?\d+',text)
                                 if text2:
-                                    record.monto_ultimo_pago += float(text2[0])
-                                    fecha_anterior = r.get("date")
+                                    if "USD" in r.get("currency"):
+                                        moneda = record.env['res.currency.rate'].search([('currency_id','=',2),
+                                        ('name','<=',date.fromisoformat(r.get("date")))],order='name desc', limit=1)
+                                        record.monto_ultimo_pago += 1/moneda.rate
+                                    else:
+                                        record.monto_ultimo_pago += float(text2[0])
+                                        fecha_anterior = r.get("date")
                                 else:
                                     record.monto_ultimo_pago += 0
                         else:

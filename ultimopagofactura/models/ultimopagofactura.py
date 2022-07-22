@@ -86,7 +86,7 @@ class Ultimopagofactura(models.Model):
                                 text = r.get("name").replace(",","")
                                 text2 = re.findall('\d*\.?\d+',text)
                                 if text2:
-                                    if "USD" in r.get("currency"):
+                                    if "Dolares" in r.get("journal_name"):
                                         moneda = record.env['res.currency.rate'].search([('currency_id','=',2),
                                         ('name','<=',date.fromisoformat(r.get("date")))],order='name desc', limit=1)
                                         tipo_cambio = 1/moneda.rate

@@ -73,20 +73,24 @@ class Ultimopagofactura(models.Model):
                 fecha_anterior = 0
                 sorted_content = sorted(content, key=lambda x: datetime.strptime(x['date'], '%Y-%m-%d'), reverse = True)
                 for r in sorted_content:
-                    text = ""
-                    text2 = ""
                     if(r.get("journal_name") != "Exchange Difference"):
                         if(r.get("name") != ""):
+                            #Si los pagos se relizaron en la misma fecha, estos se deben sumar
                             if(r.get("date") == fecha_anterior or fecha_anterior == 0):
                                 if(r.get("name") == False):
                                     record.monto_ultimo_pago += 0
                                     continue
-                                #TODO: Validar que text no este vacio
-                                text = r.get("name").replace(",","")
-                                text2 = re.findall('\d*\.?\d+',text)
-                                if text2:
-                                    record.monto_ultimo_pago += float(text2[0])
-                                    fecha_anterior = r.get("date")
+                                #TODO: Validar que el monto no este vacio
+                                if r.get("amount"):
+                                    if "USD" in r.get("currency"):
+                                        moneda = record.env['res.currency.rate'].search([('currency_id','=',2),
+                                        ('name','<=',date.fromisoformat(r.get("date")))],order='name desc', limit=1)
+                                        tipo_cambio = 1/moneda.rate
+                                        record.monto_ultimo_pago += r.get("amount") * tipo_cambio
+                                        fecha_anterior = r.get("date")
+                                    else:
+                                        record.monto_ultimo_pago += r.get("amount")
+                                        fecha_anterior = r.get("date")
                                 else:
                                     record.monto_ultimo_pago += 0
                         else:

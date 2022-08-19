@@ -51,14 +51,27 @@ class Productostransito(models.Model):
         default = 0,
     )
 
+    referencia_pedido = fields.Char(
+        string = 'Referencia del pedidos',
+        related = 'order_id.name',
+        store = True,
+    )
+
+    devueltos = fields.Float(
+        string = 'Devueltos',
+        compute = '_get_devueltos',
+        default = 0,
+    )
+
     @api.depends('move_ids')
     def _en_transito(self):
         for r in self:
             if r.state == 'purchase':
                 if r.move_ids:
                     for m in r.move_ids:
-                        tm = m.filtered(lambda x: x.state == 'assigned')
-                        r.entransito = sum(tm.mapped('product_uom_qty'))
+                        tm = m.filtered(lambda x: x.state == 'assigned' and ('IN' in x.reference or
+                                        'Devolución' not in x.picking_id.origin))
+                        r.entransito += sum(tm.mapped('product_uom_qty'))
                         subtotal = r.price_unit * r.entransito
                         fecha = r.order_id.date_approve
                         #Se hace la conversion reutilizando el metodo de currency_id
@@ -101,7 +114,7 @@ class Productostransito(models.Model):
                     if move.state == 'done':
                         if move.location_dest_id.usage == "supplier":
                             if move.to_refund:
-                                total -= move.product_uom._compute_quantity(move.product_uom_qty, line.product_uom)  
+                                total -= (move.product_uom._compute_quantity(move.product_uom_qty, line.product_uom)) - line.devueltos
                         elif move.origin_returned_move_id and move.origin_returned_move_id._is_dropshipped() and not move._is_dropshipped_returned():
                             # Edge case: the dropship is returned to the stock, no to the supplier.
                             # In this case, the received quantity on the PO is set although we didn't
@@ -119,7 +132,10 @@ class Productostransito(models.Model):
                             total -= move.product_uom._compute_quantity(move.product_uom_qty, line.product_uom)
                         else:
                             total += move.product_uom._compute_quantity(move.product_uom_qty, line.product_uom)
-                        line.entransito_store = (line.product_qty - total) - line.cancelados
+                        if line.entransito == 0:
+                            line.entransito_store = 0
+                        else:
+                            line.entransito_store = ((line.product_qty - total) - line.cancelados)
                         subtotal = line.price_unit * line.entransito_store
                         fecha = line.order_id.date_approve
                         line.costotransito = line.order_id.currency_id._convert(subtotal,
@@ -127,7 +143,10 @@ class Productostransito(models.Model):
                                                                                 line.order_id.company_id,
                                                                                 fecha)
                     if total == 0:
-                        line.entransito_store = line.entransito_store - line.cancelados
+                        if line.entransito <= 0:
+                            line.entransito_store = 0
+                        else:
+                            line.entransito_store = (line.entransito_store - line.cancelados)
                         subtotal = line.price_unit * line.entransito_store
                         fecha = line.order_id.date_approve
                         line.costotransito = line.order_id.currency_id._convert(subtotal,
@@ -139,5 +158,16 @@ class Productostransito(models.Model):
     def _get_cancelados(self):
         for record in self:
             for m in record.move_ids:
-                tm = m.filtered(lambda x: x.state == 'cancel')
-                record.cancelados = sum(tm.mapped('product_uom_qty'))
+                tm = m.filtered(lambda x: x.state == 'cancel' and ('IN' in x.reference or
+                                'Devolución' not in x.picking_id.origin))
+                record.cancelados += sum(tm.mapped('product_uom_qty'))
+
+    @api.depends('move_ids')
+    def _get_devueltos(self):
+        for record in self:
+            for m in record.move_ids:
+                tm = m.filtered(lambda x: 'Devolución' in x.picking_id.origin and x.state == 'done')
+                if tm:
+                    record.devueltos += sum(tm.mapped('product_uom_qty'))
+                else:
+                    record.devueltos += 0

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <menuitem id="main_productostransito_menu" name="Productos en tránsito" parent="purchase.menu_purchase_root"/>
+</odoo>

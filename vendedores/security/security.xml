@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <record id="category_vendors_management" model="ir.module.category">
+        <field name="name">Manejo vendedores</field>
+        <field name="description">Acceso de usuario a nivel vendedor</field>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="group_vendors" model="res.groups">
+        <field name="name">Vendedor</field>
+        <field name="category_id" ref="category_vendors_management"/>
+    </record>
+
+</odoo>

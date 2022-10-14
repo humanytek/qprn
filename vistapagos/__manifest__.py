@@ -1,6 +1,6 @@
 {
     'name': 'Vista pagos',
-    'version': '13.0.0.2.2',
+    'version': '13.0.0.2.3',
     'author': 'JuanEmus',
     'depends': [
         'account',

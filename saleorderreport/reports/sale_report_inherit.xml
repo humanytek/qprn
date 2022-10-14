@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>       
+
+    <template id="sale_report_inherit_template" inherit_id="sale.report_saleorder_document">
+        <xpath expr="//p[@id='fiscal_position_remark']" position="after">
+            <div>
+                <b>
+                    Para pagos con transferencia o deposito en efectivo y cheques nominativos
+                    utilice cualquiera de nuestras cuentas bancarias:
+                </b>
+                <br/>
+            </div>
+            <div style="display: flex; display: -webkit-box; -webkit-box-pack: justify; justify-content: space-between;">
+                <div style="margin: 5px; text-align: center;">
+                    <b>Banorte</b><br/>
+                    CUENTA: 0336867380<br/>
+                    CLABE: 072 730 00336867380 1<br/>
+                    MONEDA: Peso mexicano
+                </div>
+                <div style="margin: 5px; text-align: center;">
+                    <b>Banorte</b><br/>
+                    CUENTA: 0883812802<br/>
+                    CLABE: 072 730 00883812802 7<br/>
+                    MONEDA: Dólar americano
+                </div>
+                <div style="margin: 5px; text-align: center;">
+                    <b>Bajio</b><br/>
+                    CUENTA: 0291136850201<br/>
+                    CLABE: 030730900022813246<br/>
+                    MONEDA: Peso mexicano
+                </div>
+                <div style="margin: 5px; text-align: center;">
+                    <b>Intercam</b><br/>
+                    CLABE: 136 730 619 973 900 150<br/>
+                    MONEDA: Dólar americano
+                </div>
+            </div>
+            <div>
+                <b>
+                    Dudas o aclaraciones sobre su pago o factura, favor de contactar a nuestro departamento de crédito y cobranza:
+                    sbernal@quipron.com.mx, cobranzasin@quipron.com.mx ó cobranza@quipron.com.mx
+                </b><br/>
+            </div>
+        </xpath>
+    </template>     
+</odoo>

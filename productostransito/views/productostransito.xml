@@ -1,5 +1,22 @@
-<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
+
+    <record id="productostransito_view_list" model="ir.ui.view">
+        <field name="name">productostransito.view.list.inherited</field>
+        <field name="model">purchase.order.line</field>
+        <field name="inherit_id" ref="purchase.purchase_order_line_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_qty']" position="after">
+                <field name="qty_received"/>
+                <field name="entransito_store" sum="Total de productos en tránsito"/>
+                <field name="moneda_default" invisible="1"/>
+                <field name="costotransito_store" sum="Costo total en tránsito"/>
+            </xpath>
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="almacen"/>
+            </xpath>
+        </field>
+    </record>
 
     <record id="productostransito_view_form" model="ir.ui.view">
         <field name="name">purchase.order.line.view.form.inherited</field>
@@ -25,7 +42,7 @@
                 <field name="state"/>
                 <field name="entransito_store"/>
                 <filter name="productos_transito" string="Productos en tránsito"
-                domain="[('state', '=', 'purchase'), ('entransito_store', '>', 0)]"/>
+                    domain="[('state', '=', 'purchase'), ('entransito_store', '>', 0)]"/>
             </search>
         </field>
     </record>
@@ -39,9 +56,7 @@
             'search_default_productos_transito': 1,
         }"/>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                No hay productos que mostrar
-            </p>
+            <p class="o_view_nocontent_smiling_face"> No hay productos que mostrar </p>
         </field>
     </record>
 
@@ -58,23 +73,7 @@
         <field name="view_id" ref="productostransito_view_form"/>
         <field name="act_window_id" ref="productostransito_action"/>
     </record>
-    
-    <record id="productostransito_view_list" model="ir.ui.view">
-        <field name="name">productostransito.view.list.inherited</field>
-        <field name="model">purchase.order.line</field>
-        <field name="inherit_id" ref="purchase.purchase_order_line_tree"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='product_qty']" position="after">
-                <field name="qty_received"/>
-                <field name="entransito_store" sum="Total de productos en tránsito"/>
-                <field name="moneda_default" invisible="1"/>
-                <field name="costotransito_store" sum="Costo total en tránsito"/>
-            </xpath>
-            <xpath expr="//field[@name='product_id']" position="after">
-                <field name="almacen"/>
-            </xpath>
-        </field>
-    </record>
 
-    <menuitem id="productostransito_menu" name="Productos en tránsito compras" parent="main_productostransito_menu" action="productostransito_action"/>
+    <menuitem id="productostransito_menu" name="Productos en tránsito compras"
+        parent="main_productostransito_menu" action="productostransito_action"/>
 </odoo>

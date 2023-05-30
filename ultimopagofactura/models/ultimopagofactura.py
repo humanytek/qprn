@@ -74,14 +74,12 @@ class Ultimopagofactura(models.Model):
             dict = record.invoice_payments_widget
             if dict and dict.get("content"):
                 content = dict.get("content")
-                record.fecha_ultimo_pago_factura = date.fromisoformat(
-                    max(payment.get("date") for payment in content)
+                record.fecha_ultimo_pago_factura = max(
+                    str(payment.get("date") for payment in content)
                 )
                 record.parcialidades = len(content)
                 fecha_anterior = 0
-                sorted_content = sorted(
-                    content, key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"), reverse=True
-                )
+                sorted_content = sorted(content, key=lambda x: x["date"], reverse=True)
                 for r in sorted_content:
                     if r.get("journal_name") != "Exchange Difference":
                         if r.get("name") != "":
@@ -96,7 +94,7 @@ class Ultimopagofactura(models.Model):
                                         moneda = record.env["res.currency.rate"].search(
                                             [
                                                 ("currency_id", "=", 2),
-                                                ("name", "<=", date.fromisoformat(r.get("date"))),
+                                                ("name", "<=", r.get("date")),
                                             ],
                                             order="name desc",
                                             limit=1,

@@ -26,6 +26,26 @@ In this case, all the CFDIs with this case will be moved to the folder
      .. figure:: ../l10n_mx_edi_document/static/src/img/not_found.png
         :width: 600pt
 
+Extra Features:
+----------------
+
+In some cases, the documents to import comes from a subscription, and the Serie y Folio do not
+change, or are not present in the CFDI, then, when search an invoice, found the last invoice
+in the system for the same partner and same totals. In this case, must be generated a new
+record, so, to support this case is necessary add a system parameter with the key
+``documents_force_use_date`` that could be 'month' or 'day', This will add to the domain if
+the CFDI and the invoice has to have exactly the same day or in the same month.
+
+**Avoid auto partner generation**
+
+When an invoice is attached, search for a partner with the same VAT from the CFDI,
+and in case that not found any partner with that VAT, create a new one with the
+document information.
+
+If you want to avoid the auto-creation, is necessary to generate a system parameter
+with the next key ´´mx_documents_omit_partner_generation´´. And if the partner is
+not found, the document will be sent to the incorrect documents folder to allow
+generate manually the new partner.
 
 .. contents::
 

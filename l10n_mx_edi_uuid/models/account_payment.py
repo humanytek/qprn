@@ -7,7 +7,7 @@ class AccountPayment(models.Model):
     _inherit = 'account.payment'
 
     l10n_mx_edi_cfdi_uuid = fields.Char(
-        compute='_compute_l10n_mx_edi_cfdi_uuid',
+        'Fiscal Folio', compute='_compute_l10n_mx_edi_cfdi_uuid',
         search='_search_l10n_mx_edi_cfdi_uuid')
 
     @api.model
@@ -21,7 +21,7 @@ class AccountPayment(models.Model):
         payments = self.search(uuid_domain + args, limit=limit)
         res = payments.ids
         if not payments:
-            res = super(AccountPayment, self)._name_search(
+            res = super()._name_search(
                 name, args, operator, limit, name_get_uid)
         return res
 

@@ -12,16 +12,10 @@ from odoo.tests import TransactionCase
 
 class TestL10nMxEdiUUID(TransactionCase):
     def setUp(self):
-        super(TestL10nMxEdiUUID, self).setUp()
+        super().setUp()
         self.attach_model = self.env['ir.attachment']
         self.invoice_model = self.env['account.move']
         self.payment_model = self.env['account.payment']
-        self.method_model = self.env['account.payment.method']
-        self.method = self.method_model.create({
-            'name': 'Test',
-            'payment_type': 'inbound',
-            'code': 'test',
-        })
         self.xml_expected_str = tools.file_open(os.path.join(
             'l10n_mx_edi_uuid', 'tests', 'expected_cfdi33.xml')
         ).read().encode('UTF-8')
@@ -64,7 +58,6 @@ class TestL10nMxEdiUUID(TransactionCase):
             'amount': 100,
             'partner_type': 'customer',
             'payment_type': 'inbound',
-            'payment_method_id': self.method.id,
             'journal_id': self.env['account.journal'].search([('type', '=', 'bank')], limit=1).id
         })
 
@@ -321,3 +314,36 @@ class TestL10nMxEdiUUID(TransactionCase):
     def test_attachment_update_uuid_in_invoice(self):
         self.invoice_type = 'in_invoice'
         self.test_attachment_update_uuid()
+
+    def test_uuid_invoice_self_signed(self):
+        invoice = self.create_invoice()
+        invoice.state = 'posted'
+        self.assign_xml_attachment(invoice)
+        signed_edi = invoice._get_l10n_mx_edi_signed_edi_document()
+        attachment = signed_edi.attachment_id
+        self.assertTrue(attachment, "Attachment not found")
+        attachment.refresh()
+
+        self.invoice_type = 'in_invoice'
+        invoice_2 = self.create_invoice()
+        invoice_2.state = 'posted'
+        # Allow duplicated for same invoice
+        attachment = attachment.copy()
+        attachment.write({'res_id': invoice_2.id})
+        # Check with exists manually is  not raised
+        invoice_2._check_uuid_duplicated()
+
+        # Now should rise error because uuid duplicated on in_invoice
+        invoice_3 = self.create_invoice()
+        invoice_3.state = 'posted'
+        # Allow duplicated for same invoice
+        attachment = attachment.copy()
+        with self.assertRaisesRegex(ValidationError, 'UUID duplicated'):
+            attachment.write({'res_id': invoice_3.id})
+        # Force a duplicated from sql to bypass odoo constraint
+        self.env.cr.execute(
+            "UPDATE ir_attachment SET res_id = %s WHERE id=%s", (
+                invoice_3.id, attachment.id))
+        with self.assertRaisesRegex(ValidationError, 'UUID duplicated'):
+            # Check with exists manually is raised
+            invoice_3._check_uuid_duplicated()

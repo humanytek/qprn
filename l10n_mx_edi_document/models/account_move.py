@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.tools import float_round
 from odoo.exceptions import UserError, ValidationError
 
@@ -10,9 +10,11 @@ from odoo.exceptions import UserError, ValidationError
 class AccountInvoice(models.Model):
     _inherit = 'account.move'
 
-    def xml2record(self):
-        """Use the last attachment in the payment (xml) and fill the payment
-        data"""
+    def xml2record(self, default_account=False, analytic_account=False):
+        """Use the last attachment in the invoice (xml) and fill the invoice data"""
+        result = super().xml2record()
+        if self.country_code != 'MX' or result._context.get('xml2record'):
+            return result
         atts = self.env['ir.attachment'].search([
             ('res_model', '=', self._name),
             ('res_id', 'in', self.ids),
@@ -21,31 +23,36 @@ class AccountInvoice(models.Model):
         prod = self.env['product.product']
         sat_code = self.env['product.unspsc.code']
         uom_obj = self.env['uom.uom']
-        default_account = self.journal_id.default_account_id.id
+        default_account = default_account or self.journal_id.default_account_id.id
         invoice = self
         for attachment in atts:
             cfdi = attachment.l10n_mx_edi_is_cfdi33()
             if cfdi is False:
                 continue
             amount = 0
-            currency = self.env['res.currency'].search([
-                ('name', '=', cfdi.get('Moneda'))], limit=1)
+            currency = self.env['res.currency'].search([('name', '=', cfdi.get('Moneda'))], limit=1)
             self.l10n_mx_edi_set_cfdi_partner(cfdi, currency)
-            self.write(
-                {
-                    'ref': '%s%s' % (cfdi.get('Serie'), cfdi.get('Folio')),
-                    'invoice_date': cfdi.get('Fecha').split('T')[0],
-                    'date': cfdi.get('Fecha').split('T')[0],
-                    'currency_id': currency.id,
-                    'l10n_mx_edi_post_time': cfdi.get('Fecha').replace('T', ' '),
-                }
-            )
             invoice = self._search_invoice(cfdi) or invoice
             if invoice != self:
-                attachment.write({'res_id': False, 'res_model': False})
+                attachment.write({'res_id': invoice.id})
                 self.unlink()
                 invoice._l10n_mx_edi_update_data(attachment)
                 continue
+            cfdi_related = ''
+            if hasattr(cfdi, 'CfdiRelacionados'):
+                cfdi_related = '%s|%s' % (
+                    cfdi.CfdiRelacionados.get('TipoRelacion'),
+                    ','.join([rel.get('UUID') for rel in cfdi.CfdiRelacionados.CfdiRelacionado]))
+            invoice_data = {
+                'ref': '%s%s' % (cfdi.get('Serie', ''), cfdi.get('Folio', '')),
+                'currency_id': currency.id,
+                'l10n_mx_edi_post_time': cfdi.get('Fecha').replace('T', ' '),
+                'l10n_mx_edi_origin': cfdi_related,
+            }
+            if not self.invoice_date:
+                invoice_data['invoice_date'] = cfdi.get('Fecha').split('T')[0]
+                invoice_data['date'] = cfdi.get('Fecha').split('T')[0]
+            self.write(invoice_data)
             fiscal_position = self.fiscal_position_id
             for rec in cfdi.Conceptos.Concepto:
                 name = rec.get('Descripcion', '')
@@ -64,63 +71,54 @@ class AccountInvoice(models.Model):
                     '|', ('default_code', '=ilike', no_id),
                     ('name', '=ilike', name)], limit=1)
                 accounts = product.product_tmpl_id.get_product_accounts(fiscal_pos=fiscal_position)
-                if self.is_sale_document(include_receipts=True):
-                    # Out invoice.
-                    account_id = accounts['income'] or default_account
-                elif self.is_purchase_document(include_receipts=True):
-                    # In invoice.
-                    account_id = accounts['expense'] or default_account
+                account_id = (accounts['income'] if self.is_sale_document(
+                    include_receipts=True) else accounts['expense']) or default_account
 
                 discount = 0.0
                 if rec.get('Descuento') and amount:
-                    discount = (float(rec.get('Descuento', '0.0')) / amount) * 100  # noqa
+                    discount = (float(rec.get('Descuento', '0.0')) / amount) * 100
 
                 domain_uom = [('name', '=ilike', uom)]
                 code_sat = sat_code.search([('code', '=', uom_code)], limit=1)
                 domain_uom = [('unspsc_code_id', '=', code_sat.id)]
-                uom_id = uom_obj.with_context(
-                    lang='es_MX').search(domain_uom, limit=1)
-                # if product_code in self._get_fuel_codes() or \
-                #         restaurant_category_id in supplier.category_id:
-                #     tax = taxes.get(index)[0] if taxes.get(index, []) else {}
-                #     qty = 1.0
-                #     price = tax.get('amount') / (tax.get('rate') / 100)
-                #     invoice_line_ids.append((0, 0, {
-                #         'account_id': account_id,
-                #         'name':  _('Non Deductible') if
-                #         restaurant_category_id in supplier.category_id else
-                #         _('FUEL - IEPS'),
-                #         'quantity': qty,
-                #         'uom_id': uom_id.id,
-                #         'price_unit': float(rec.get('Importe', 0)) - price,
-                #     }))
+                uom_id = uom_obj.with_context(lang='es_MX').search(domain_uom, limit=1)
+                if rec.get('ClaveProdServ', '') in self._get_fuel_codes():
+                    taxes = self.collect_taxes(rec.Impuestos.Traslados.Traslado) if hasattr(
+                        rec.Impuestos, 'Traslados') else []
+                    tax = taxes[0] if taxes else {}
+                    qty = 1.0
+                    price = tax.get('amount') / (tax.get('rate') / 100)
+                    self.write({'invoice_line_ids': [(0, 0, {
+                        'account_id': account_id,
+                        'name':  _('FUEL - IEPS'),
+                        'quantity': qty,
+                        'product_uom_id': uom_id.id,
+                        'price_unit': float(rec.get('Importe', 0)) - price,
+                        'analytic_account_id': analytic_account,
+                    })]})
                 self.write({'invoice_line_ids': [(0, 0, {
                     'product_id': product.id,
                     'account_id': account_id,
                     'name': name,
                     'quantity': float(qty),
+                    'analytic_account_id': analytic_account,
                     'product_uom_id': uom_id.id,
                     'tax_ids': self.get_line_taxes(rec),
-                    'price_unit': currency.round(float(price)),
+                    'price_unit': float(price),
                     'discount': discount,
                 })]})
 
-            cfdi_related = ''
-            if hasattr(cfdi, 'CfdiRelacionados'):
-                cfdi_related = '%s|%s' % (
-                    cfdi.CfdiRelacionados.get('TipoRelacion'),
-                    ','.join([rel.get('UUID') for
-                              rel in cfdi.CfdiRelacionados.CfdiRelacionado]))
-            invoice_data = {
-                'l10n_mx_edi_origin': cfdi_related,
-            }
-            self.write(invoice_data)
-            self._recompute_tax_lines()
+            for tax in self._get_local_taxes(cfdi):
+                self.write({'invoice_line_ids': [(0, 0, {
+                    'account_id': default_account,
+                    'name': tax[-1]['name'],
+                    'quantity': 1,
+                    'price_unit': tax[-1]['amount'],
+                })]})
+
             self._l10n_mx_edi_update_data(attachment)
-            if cfdi_related.split('|')[0] in ('01', '02', '03'):
-                move = self.line_ids.filtered(
-                    lambda line: line.account_id.internal_type in (
-                        'payable', 'receivable'))
+            if self.state == 'posted' and cfdi_related.split('|')[0] in ('01', '03'):
+                move = self.line_ids.filtered(lambda line: line.account_id.internal_type in ('payable', 'receivable'))
                 for uuid in self.l10n_mx_edi_origin.split('|')[1].split(','):
                     inv = self.search([('l10n_mx_edi_cfdi_uuid', '=', uuid.upper().strip())])
                     if not inv:
@@ -129,19 +127,31 @@ class AccountInvoice(models.Model):
         return invoice
 
     def _l10n_mx_edi_update_data(self, attachment):
-        if self.edi_state != 'sent':
-            self.edi_state = 'sent'
-            self.env['account.edi.document'].create({
-                'edi_format_id': self.env.ref('l10n_mx_edi.edi_cfdi_3_3').id,
-                'move_id': self.id,
-                'state': 'sent',
-                'attachment_id': attachment.id,
-            })
-            try:
-                self.action_post()
-            except (UserError, ValidationError) as exe:
-                self.message_post(body=_(
-                    '<b>Error on invoice validation </b><br/>%s') % exe.name)
+        if self.edi_state == 'sent':
+            return
+        self.edi_state = 'sent'
+        document = self.env['account.edi.document'].create({
+            'edi_format_id': self.env.ref('l10n_mx_edi.edi_cfdi_3_3').id,
+            'move_id': self.id,
+            'state': 'sent',
+            'attachment_id': attachment.id,
+        })
+        sat_param = self.env['ir.config_parameter'].sudo().get_param('l10n_mx_edi_document.omit_sat_validation', False)
+        if not sat_param:
+            self.l10n_mx_edi_update_sat_status()
+        if self.move_type in ('in_refund', 'in_invoice'):
+            return
+        # The invoice will be removed, then avoid validate it.
+        if not sat_param and not self.company_id.l10n_mx_edi_pac_test_env and self.l10n_mx_edi_sat_status != 'valid':
+            return
+        try:
+            self.action_post()
+            # Write again because could be removed on the post method and are necessary to avoid stamp again
+            document.attachment_id = attachment
+            document.state = 'sent'
+        except (UserError, ValidationError) as exe:
+            self.message_post(body=_('<b>Error on invoice validation </b><br/>%s') % exe.name)
+        return
 
     def l10n_mx_edi_set_cfdi_partner(self, cfdi, currency):
         self.ensure_one()
@@ -150,9 +160,12 @@ class AccountInvoice(models.Model):
         partner_cfdi = {}
         if self.move_type in ('out_invoice', 'out_refund'):
             partner_cfdi = cfdi.Receptor
-            domain.append(('vat', '=', partner_cfdi.get('Rfc')))
         elif self.move_type in ('in_invoice', 'in_refund'):
             partner_cfdi = cfdi.Emisor
+        vat = partner_cfdi.get('Rfc')
+        if vat in ('XEXX010101000', 'XAXX010101000'):
+            domain.append(('name', '=', partner_cfdi.get('Nombre')))
+        else:
             domain.append(('vat', '=', partner_cfdi.get('Rfc')))
         domain.append(('is_company', '=', True))
         cfdi_partner = partner.search(domain, limit=1)
@@ -165,21 +178,23 @@ class AccountInvoice(models.Model):
         if not cfdi_partner:
             domain.pop()
             cfdi_partner = partner.search(domain, limit=1)
-        if not cfdi_partner:
+        partner_param = self.env['ir.config_parameter'].sudo().get_param('mx_documents_omit_partner_generation', '')
+        if not cfdi_partner and not partner_param:
             cfdi_partner = partner.create({
                 'name': partner_cfdi.get('Nombre'),
                 'vat': partner_cfdi.get('Rfc'),
-                'country_id': False,  # TODO
+                'country_id': self.env.ref('base.mx').id,
             })
-            cfdi_partner.message_post(body=_(
-                'This record was generated from DMS'))
-        self.partner_id = cfdi_partner
-        self._onchange_partner_id()
+            cfdi_partner.message_post(body=_('This record was generated from DMS'))
+        if cfdi_partner:
+            self.partner_id = cfdi_partner
+            self._onchange_partner_id()
 
     def get_line_taxes(self, line):
         taxes_list = []
         if not hasattr(line, 'Impuestos'):
             return taxes_list
+        taxes = []
         taxes_xml = line.Impuestos
         if hasattr(taxes_xml, 'Traslados'):
             taxes = self.collect_taxes(taxes_xml.Traslados.Traslado)
@@ -190,7 +205,8 @@ class AccountInvoice(models.Model):
                 [('name', 'ilike', tax['tax'])])
             domain = [
                 ('tax_group_id', 'in', tax_group_id.ids),
-                ('type_tax_use', '=', 'purchase' if 'in_' in self.move_type else 'sale')]  # noqa
+                ('type_tax_use', '=', 'purchase' if 'in_' in self.move_type else 'sale'),
+                ('company_id', '=', self.company_id.id)]
             if -10.67 <= tax['rate'] <= -10.66:
                 domain.append(('amount', '<=', -10.66))
                 domain.append(('amount', '>=', -10.67))
@@ -210,6 +226,30 @@ class AccountInvoice(models.Model):
                 continue
             taxes_list.append((4, tax_get.id))
         return taxes_list
+
+    def _get_local_taxes(self, xml):
+        if not hasattr(xml, 'Complemento'):
+            return {}
+        local_taxes = xml.Complemento.xpath(
+            'implocal:ImpuestosLocales', namespaces={'implocal': 'http://www.sat.gob.mx/implocal'})
+        taxes = []
+        if not local_taxes:
+            return taxes
+        local_taxes = local_taxes[0]
+        if hasattr(local_taxes, 'RetencionesLocales'):
+            for local_ret in local_taxes.RetencionesLocales:
+                taxes.append((0, 0, {
+                    'name': local_ret.get('ImpLocRetenido'),
+                    'amount': float(local_ret.get('Importe')) * -1,
+                }))
+        if hasattr(local_taxes, 'TrasladosLocales'):
+            for local_tras in local_taxes.TrasladosLocales:
+                taxes.append((0, 0, {
+                    'name': local_tras.get('ImpLocTrasladado'),
+                    'amount': float(local_tras.get('Importe')),
+                }))
+
+        return taxes
 
     @staticmethod
     def collect_taxes(taxes_xml):
@@ -237,11 +277,13 @@ class AccountInvoice(models.Model):
         return taxes
 
     def _search_invoice(self, cfdi):
-        folio = cfdi.get('Folio')
-        serie_folio = '%s%s' % (cfdi.get('Serie'), folio)
-        domain = [
-            '|', ('partner_id', 'child_of', self.partner_id.id),
-            ('partner_id', '=', self.partner_id.id)]
+        folio = cfdi.get('Folio', '')
+        serie = cfdi.get('Serie', '')
+        serie_folio = '%s%%%s' % (serie, folio) if serie or folio else ''
+        domain = [('move_type', '=', self.move_type)]
+        if self.partner_id:
+            domain.extend([
+                '|', ('partner_id', 'child_of', self.partner_id.id), ('partner_id', '=', self.partner_id.id)])
         # The parameter l10n_mx_force_only_folio is used when the user create the invoices from a PO and only set
         # the folio in the reference.
         force_folio = self.env['ir.config_parameter'].sudo().get_param('l10n_mx_force_only_folio', '')
@@ -249,25 +291,68 @@ class AccountInvoice(models.Model):
             domain.append('|')
             domain.append(('ref', '=ilike', folio))
         if serie_folio:
+            domain.append('|')
+            domain.append(('name', '=ilike', serie_folio))
             domain.append(('ref', '=ilike', serie_folio))
-            return self.search(domain, limit=1)
+            invoice = self.search(domain, limit=1)
+            return invoice if not invoice.l10n_mx_edi_cfdi_uuid or invoice.l10n_mx_edi_cfdi_uuid == self.l10n_mx_edi_cfdi_uuid else False  # noqa
+        date_type = self.env['ir.config_parameter'].sudo().get_param('documents_force_use_date')
+        if date_type == "day":
+            domain.append(('invoice_date', '=', fields.datetime.strptime(cfdi.get('Fecha'),
+                                                                         '%Y-%m-%dT%H:%M:%S').date()))
+        elif date_type == "month":
+            xml_date = fields.datetime.strptime(cfdi.get('Fecha'), '%Y-%m-%dT%H:%M:%S').date()
+            domain.append(('invoice_date', '>=', xml_date.replace(day=1)))
+            last_day = xml_date.replace(day=1, month=xml_date.month + 1) - timedelta(days=1)
+            domain.append(('invoice_date', '<=', last_day))
+
         amount = float(cfdi.get('Total', 0.0))
         domain.append(('amount_total', '>=', amount - 1))
         domain.append(('amount_total', '<=', amount + 1))
-        domain.append(('l10n_mx_edi_cfdi_name', '=', False))
         domain.append(('state', '!=', 'cancel'))
 
         # The parameter l10n_mx_edi_vendor_bills_force_use_date is used when the user create the invoices from a PO
         # and not assign the same date that in the CFDI.
         date_type = self.env['ir.config_parameter'].sudo().get_param('l10n_mx_edi_vendor_bills_force_use_date')
-        xml_date = fields.datetime.strptime(cfdi.get('Fecha').split('T')[0], '%Y-%m-%dT%H:%M:%S').date()
+        xml_date = fields.datetime.strptime(cfdi.get('Fecha'), '%Y-%m-%dT%H:%M:%S').date()
 
         if date_type == "day":
             domain.append(('invoice_date', '=', xml_date))
         elif date_type == "month":
             domain.append(('invoice_date', '>=', xml_date.replace(day=1)))
-            last_day = xml_date.replace(
-                day=1, month=xml_date.month + 1) - timedelta(days=1)
+            last_day = xml_date.replace(day=1, month=xml_date.month + 1) - timedelta(days=1)
             domain.append(('invoice_date', '<=', last_day))
 
+        domain.append(('l10n_mx_edi_cfdi_uuid', 'in', (False, self.l10n_mx_edi_cfdi_uuid)))
         return self.search(domain, limit=1)
+
+    @api.model
+    def _get_fuel_codes(self):
+        """Return the codes that could be used in FUEL"""
+        fuel_codes = [str(r) for r in range(15101500, 15101516)]
+        fuel_codes.extend(self.env.user.company_id.l10n_mx_edi_fuel_code_sat_ids.mapped('code'))
+        return fuel_codes
+
+    def _get_edi_document_errors(self):
+        if self.country_code != 'MX':
+            return super()._get_edi_document_errors()
+        errors = []
+        partner_param = self.env['ir.config_parameter'].sudo().get_param('mx_documents_omit_partner_generation', '')
+        if not self.partner_id and partner_param:
+            errors.append(_('The partner does not exist, please create it manually and try to generate the document '
+                            'again.'))
+        sat_param = self.env['ir.config_parameter'].sudo().get_param('l10n_mx_edi_document.omit_sat_validation', False)
+        if not sat_param and self.edi_state == 'sent' and not self.company_id.l10n_mx_edi_pac_test_env and\
+                self.l10n_mx_edi_sat_status != 'valid':
+            errors.append(
+                _('The SAT status of this document is not valid in the SAT. (Is %s)') % self.l10n_mx_edi_sat_status)
+        return errors
+
+    def button_cancel(self):
+        """Avoid set EDI state to cancel on vendor documents for MX"""
+        res = super().button_cancel()
+
+        self.filtered(lambda i: not i.l10n_mx_edi_cfdi_request).edi_document_ids.filtered(
+            lambda doc: doc.attachment_id).write({'state': 'cancelled', 'error': False, 'blocking_level': False})
+
+        return res

@@ -25,7 +25,7 @@ class AccountMove(models.Model):
         invoices = self.search(uuid_domain + args, limit=limit)
         res = invoices.ids
         if not invoices:
-            res = super(AccountMove, self)._name_search(
+            res = super()._name_search(
                 name, args, operator, limit, name_get_uid)
         return res
 
@@ -53,8 +53,7 @@ class AccountMove(models.Model):
             ('res_model', '=', 'account.move'),
             ('l10n_mx_edi_cfdi_uuid', positive_operator, value),
             ('l10n_mx_edi_cfdi_uuid', '!=', None)], ['res_id'])
-        invoice_ids = list(set([
-            attachment['res_id'] for attachment in attachments]))
+        invoice_ids = list({attachment['res_id'] for attachment in attachments})
         falsy_invoice_ids = None
         domain = [('id', domain_op, invoice_ids)]
         if isinstance(value, list) and (None in value or False in value):
@@ -96,7 +95,7 @@ class AccountMove(models.Model):
             return
         query = """
             SELECT
-                MIN(l10n_mx_edi_cfdi_uuid), array_agg(DISTINCT inv.id)
+                MIN(l10n_mx_edi_cfdi_uuid || inv.move_type) as uuid, array_agg(DISTINCT inv.id)
             FROM
                 ir_attachment att
             INNER JOIN
@@ -107,7 +106,7 @@ class AccountMove(models.Model):
                 AND l10n_mx_edi_cfdi_uuid IS NOT NULL
                 AND inv.company_id = %%s
             %s
-            GROUP BY trim(upper(l10n_mx_edi_cfdi_uuid))
+            GROUP BY trim(upper(l10n_mx_edi_cfdi_uuid || inv.move_type))
             HAVING count(DISTINCT inv.id) >= 2
         """
         params = (self._name, tuple(to_omit), self.env.user.company_id.id)
@@ -140,6 +139,6 @@ class AccountMove(models.Model):
     def _compute_cfdi_values(self):
         """Inherit method to re-compute the field `l10n_mx_edi_cfdi_uuid` that is also set in this method.
         """
-        res = super(AccountMove, self)._compute_cfdi_values()
+        res = super()._compute_cfdi_values()
         self._compute_l10n_mx_edi_cfdi_uuid()
         return res

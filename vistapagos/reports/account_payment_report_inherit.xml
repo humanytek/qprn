@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<odoo>       
+<odoo>
 
-    <template id="account_report_inherit_template" inherit_id="account.report_payment_receipt_document">
-        <xpath expr="//div[@class='page']/div[hasclass('row','mt64')]" position="after">
+    <template id="account_report_inherit_template"
+        inherit_id="account.report_payment_receipt_document">
+        <xpath expr="//div[@class='row'][1]" position="after">
             <div class="row">
                 <div class="col-6" t-if="o.date">
-                    <strong>Tipo de cambio del día de pago: </strong><span t-field="o.tipocambio_pago_store" t-options="{'widget': 'monetary', 'display_currency': o.company_currency_id}"/>
+                    <strong>Tipo de cambio del día de pago: </strong>
+                    <span t-field="o.tipocambio_pago_store"
+                        t-options="{'widget': 'monetary', 'display_currency': o.company_currency_id}"/>
                 </div>
             </div>
         </xpath>
-    </template>     
+    </template>
 </odoo>

@@ -71,7 +71,7 @@ class Ultimopagofactura(models.Model):
                 record.fecha_ultimo_pago_factura = None
                 record.parcialidades = 0
                 continue
-            dict = json.loads(record.invoice_payments_widget)
+            dict = record.invoice_payments_widget
             if dict and dict.get("content"):
                 content = dict.get("content")
                 record.fecha_ultimo_pago_factura = date.fromisoformat(

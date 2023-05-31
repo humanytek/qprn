@@ -75,7 +75,7 @@ class Ultimopagofactura(models.Model):
                 content = dict.get("content")
                 fecha_ultimo_pago_factura = max(str(payment.get("date") for payment in content))
                 _logger.warning("FECHA")
-                _logger.warning(fecha_ultimo_pago_factura)
+                _logger.warning(record, content, fecha_ultimo_pago_factura)
                 _logger.warning("FECHA")
                 record.fecha_ultimo_pago_factura = fecha_ultimo_pago_factura
                 record.parcialidades = len(content)

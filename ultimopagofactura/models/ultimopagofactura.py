@@ -1,9 +1,8 @@
-import json
-import re
-from datetime import date, datetime, timedelta
+import logging
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 
 class Ultimopagofactura(models.Model):
@@ -74,6 +73,8 @@ class Ultimopagofactura(models.Model):
             dict = record.invoice_payments_widget
             if dict and dict.get("content"):
                 content = dict.get("content")
+                for payment in content:
+                    _logger.warning(str(payment.get("date")))
                 record.fecha_ultimo_pago_factura = max(
                     str(payment.get("date") for payment in content)
                 )

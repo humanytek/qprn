@@ -73,11 +73,11 @@ class Ultimopagofactura(models.Model):
             dict = record.invoice_payments_widget
             if dict and dict.get("content"):
                 content = dict.get("content")
-                for payment in content:
-                    _logger.warning(str(payment.get("date")))
-                record.fecha_ultimo_pago_factura = max(
-                    str(payment.get("date") for payment in content)
-                )
+                fecha_ultimo_pago_factura = max(str(payment.get("date") for payment in content))
+                _logger.warning("FECHA")
+                _logger.warning(fecha_ultimo_pago_factura)
+                _logger.warning("FECHA")
+                record.fecha_ultimo_pago_factura = fecha_ultimo_pago_factura
                 record.parcialidades = len(content)
                 fecha_anterior = 0
                 sorted_content = sorted(content, key=lambda x: x["date"], reverse=True)

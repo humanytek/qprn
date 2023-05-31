@@ -73,10 +73,7 @@ class Ultimopagofactura(models.Model):
             dict = record.invoice_payments_widget
             if dict and dict.get("content"):
                 content = dict.get("content")
-                fecha_ultimo_pago_factura = max(str(payment.get("date") for payment in content))
-                _logger.warning("FECHA")
-                _logger.warning(record, content, fecha_ultimo_pago_factura)
-                _logger.warning("FECHA")
+                fecha_ultimo_pago_factura = max(payment.get("date") for payment in content)
                 record.fecha_ultimo_pago_factura = fecha_ultimo_pago_factura
                 record.parcialidades = len(content)
                 fecha_anterior = 0
@@ -91,7 +88,7 @@ class Ultimopagofactura(models.Model):
                                     continue
                                 # TODO: Validar que el monto no este vacio
                                 if r.get("amount"):
-                                    if "USD" in r.get("currency"):
+                                    if "USD" in r.get("currency", ""):
                                         moneda = record.env["res.currency.rate"].search(
                                             [
                                                 ("currency_id", "=", 2),

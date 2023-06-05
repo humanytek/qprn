@@ -8,13 +8,13 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='order_line']/tree//field[@name='purchase_price']"
                 position="attributes">
-                <attribute name="invisible">1</attribute>
+                <attribute name="groups">vendedores.group_vendors</attribute>
             </xpath>
             <field name="margin" position="attributes">
-                <attribute name="invisible">1</attribute>
+                <attribute name="groups">vendedores.group_vendors</attribute>
             </field>
             <field name="margin_percent" position="attributes">
-                <attribute name="invisible">1</attribute>
+                <attribute name="groups">vendedores.group_vendors</attribute>
             </field>
         </field>
     </record>
